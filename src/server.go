@@ -6,18 +6,21 @@ import (
 	"log"
 	"net"
 	"os"
+	"flag"
 )
 
-const sockAddr = "./uds.socket"
-
 func main() {
-	if _, err := os.Stat(sockAddr); err == nil {
-		if err := os.Remove(sockAddr); err != nil {
+	sockAddr := flag.String("addr", "./uds.socket", "socket address")
+	flag.Parse()
+	log.Println("socket address:", *sockAddr)
+
+	if _, err := os.Stat(*sockAddr); err == nil {
+		if err := os.Remove(*sockAddr); err != nil {
 			log.Printf("Remove socket file error: %v", err)
 		}
 	}
 
-	sock, err := net.Listen("unix", sockAddr)
+	sock, err := net.Listen("unix", *sockAddr)
 	if err != nil {
 		log.Fatal("Listen error: ", err)
 	}
