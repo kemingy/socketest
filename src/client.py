@@ -38,18 +38,16 @@ def query(socket_file, epoch, data):
 
                 t0 = time.time()
                 for _ in tqdm(range(epoch)):
-                    msg = pickle.dumps(data)
-                    logger.debug('client sending {!r}'.format(msg))
-                    logger.debug('msg length: {}'.format(len(msg)))
-                    sock.sendall(struct.pack('!i', len(msg)))
-                    sock.sendall(msg)
+                    logger.debug('client sending {!r}'.format(data))
+                    logger.debug('msg length: {}'.format(len(data)))
+                    sock.sendall(struct.pack('!i', len(data)))
+                    sock.sendall(data)
 
                     length_bytes = sock.recv(4)
                     length = struct.unpack('!i', length_bytes)[0]
                     logger.debug('expect length: {}'.format(length))
                     recv = recvall(sock, length)
                     logger.debug('recv length: {}'.format(len(recv)))
-                    _ = pickle.loads(recv)
 
                 logger.info('Time: {}'.format(time.time() - t0))
                 logger.info('close client socket')
@@ -67,12 +65,20 @@ if __name__ == "__main__":
     logger.info(args)
 
     matrix = (np.random.random((800, 800, 3)) * 256).astype(np.uint8)
-    logger.info('matrix shape: {}, type: {}'.format(matrix.shape, matrix.dtype))
+    logger.info('matrix shape: {}, type: {}'.format(
+        matrix.shape, matrix.dtype))
+    data = matrix.tobytes()
+    logger.info('data length: {}'.format(len(data)))
 
     if args.process == 1:
-        query(args.addr, args.epoch, matrix)
+        query(args.addr, args.epoch, data)
     else:
-        processes = [Process(target=query, args=(args.addr, args.epoch, matrix), daemon=True) for _ in range(args.process)]
+        processes = [
+            Process(
+                target=query,
+                args=(args.addr, args.epoch, data),
+                daemon=True) for _ in range(args.process)
+        ]
         for p in processes:
             p.start()
 
