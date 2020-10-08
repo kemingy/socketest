@@ -30,7 +30,21 @@ def recvall(sock, n):
     return data
 
 
-def query(socket_file, epoch, data):
+def recvall_pre_alloc(sock, n):
+    data = bytearray(n)
+    recv = 0
+    while recv < n:
+        packet = sock.recv(n - recv)
+        if not packet:
+            return None
+        data[recv:recv+len(packet)] = packet
+        recv += len(packet)
+    return data
+
+
+def query(socket_file, epoch, data, serialize, receive):
+    if not serialize:
+        data = data.tobytes()
     while True:
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
@@ -38,6 +52,8 @@ def query(socket_file, epoch, data):
 
                 t0 = time.time()
                 for _ in tqdm(range(epoch)):
+                    if serialize:
+                        data = pickle.dumps(data)
                     logger.debug('client sending {!r}'.format(data))
                     logger.debug('msg length: {}'.format(len(data)))
                     sock.sendall(struct.pack('!i', len(data)))
@@ -46,8 +62,10 @@ def query(socket_file, epoch, data):
                     length_bytes = sock.recv(4)
                     length = struct.unpack('!i', length_bytes)[0]
                     logger.debug('expect length: {}'.format(length))
-                    recv = recvall(sock, length)
+                    recv = receive(sock, length)
                     logger.debug('recv length: {}'.format(len(recv)))
+                    if serialize:
+                        _ = pickle.loads(recv)
 
                 logger.info('Time: {}'.format(time.time() - t0))
                 logger.info('close client socket')
@@ -61,22 +79,26 @@ if __name__ == "__main__":
     parser.add_argument('--addr', default='./uds.socket', required=False)
     parser.add_argument('--epoch', default=1000, type=int, required=False)
     parser.add_argument('--process', default=1, type=int, required=False)
+    parser.add_argument('--prealloc', default=False,
+                        required=False, action='store_true')
+    parser.add_argument('--serialize', default=False, required=False,
+                        action='store_true')
     args = parser.parse_args()
     logger.info(args)
 
     matrix = (np.random.random((800, 800, 3)) * 256).astype(np.uint8)
-    logger.info('matrix shape: {}, type: {}'.format(
-        matrix.shape, matrix.dtype))
-    data = matrix.tobytes()
-    logger.info('data length: {}'.format(len(data)))
+    logger.info('matrix shape: {}, type: {}, size: {}'.format(
+        matrix.shape, matrix.dtype, len(matrix.tobytes())))
+
+    recv = recvall_pre_alloc if args.prealloc else recvall
 
     if args.process == 1:
-        query(args.addr, args.epoch, data)
+        query(args.addr, args.epoch, matrix, args.serialize, recv)
     else:
         processes = [
             Process(
                 target=query,
-                args=(args.addr, args.epoch, data),
+                args=(args.addr, args.epoch, matrix, args.serialize, recv),
                 daemon=True) for _ in range(args.process)
         ]
         for p in processes:
