@@ -31,15 +31,14 @@ def recvall(sock, n):
 
 
 def recvall_pre_alloc(sock, n):
-    data = bytearray(n)
-    recv = 0
-    while recv < n:
-        packet = sock.recv(n - recv)
-        if not packet:
-            return None
-        data[recv:recv+len(packet)] = packet
-        recv += len(packet)
-    return data
+    buffer = bytearray(n)
+    mv = memoryview(buffer)
+    size = 0
+    while size < n:
+        packet = sock.recv_into(mv)
+        mv = mv[packet:]
+        size += packet
+    return buffer
 
 
 def query(socket_file, epoch, data, serialize, receive):
